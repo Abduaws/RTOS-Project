@@ -48,16 +48,22 @@ void delayMS(int ms){
 int main(void){
 	initStructs();
 	init();
-	// xTaskCreate(CheckButtons, "CheckButtons", 100, NULL, 2, NULL);
-	// vTaskStartScheduler();
+	xTaskCreate(CheckButtons, "CheckButtons", 100, NULL, 2, NULL);
+	vTaskStartScheduler();
 	return 0;
 }
 
 void CheckButtons(void *p){
 	for( ; ; ){
 		bool isZero = true;
-		for(int i=4; i<8; i++){
-			uint32_t bit = Get_Bit(GPIOC->DATA,i);
+		for(int i = 4; i < 8; i++){
+			uint32_t bit = Get_Bit(GPIOC->DATA, i);
+			if(i == 4) {
+				bit = Get_Bit(GPIOD->DATA, 2);
+			}
+			else if(i == 7) {
+				bit = Get_Bit(GPIOD->DATA, 3);
+			}
 			if (bit == 0){
 				moveWindow(PortC_Buttons[i-4]);
 				isZero = false;
@@ -66,11 +72,11 @@ void CheckButtons(void *p){
 		if(isZero && !CarWindow.autoMode){
 			stopWindow();
 		}
-		uint32_t bit = Get_Bit(GPIOD->DATA,6);
+		uint32_t bit = Get_Bit(GPIOB->DATA, 0);
 		if (bit == 0){
 				limitSwitchHandler(0);
 		}
-		bit = Get_Bit(GPIOD->DATA,7);
+		bit = Get_Bit(GPIOB->DATA, 1);
 		if (bit == 0){
 				limitSwitchHandler(1);
 		}
@@ -145,18 +151,24 @@ void initStructs(void){
 	CarWindow.isFullyOpened = false;
 	CarWindow.isLocked = false;
 	CarWindow.autoMode = false;
+	
 	static struct Button driverUpButton;
 	static struct Button driverDownButton;
-	static struct Button passengerUpButton; 
-	static struct Button passengerDownButton; 
+	static struct Button passengerUpButton;
+	static struct Button passengerDownButton;
+	
 	driverUpButton.user = driver;
 	driverUpButton.dir = up;
+	
 	driverDownButton.user = driver;
 	driverDownButton.dir = down;
+	
 	passengerUpButton.user = passenger;
 	passengerUpButton.dir = up;
+	
 	passengerDownButton.user = passenger;
 	passengerDownButton.dir = down;
+	
 	PortC_Buttons[0] = driverUpButton;
 	PortC_Buttons[1] = driverDownButton;
 	PortC_Buttons[2] = passengerUpButton;
@@ -169,13 +181,17 @@ void init(void){
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
   while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF));
 	
-	//PORT D SETUP
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
-  while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOD));
+	//PORT B SETUP
+  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+  while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOB));
 	
 	//PORT C SETUP
   SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
   while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOC));
+	
+	//PORT D SETUP
+  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+  while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOD));
 	
 	//Red Led Setup
   GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1);
@@ -198,10 +214,10 @@ void init(void){
   GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE , GPIO_PIN_0 | GPIO_PIN_1 );
 	
 	//limit Switch Pins Setup
-  GPIOPinTypeGPIOInput(GPIO_PORTD_BASE , GPIO_PIN_6 | GPIO_PIN_7 );
-	GPIOIntTypeSet(GPIO_PORTD_BASE, GPIO_PIN_6 | GPIO_PIN_7, GPIO_FALLING_EDGE);
-	Set_Bit(GPIOD->PUR, 6);
-	Set_Bit(GPIOD->PUR, 7);
+  GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_0 | GPIO_PIN_1 );
+	GPIOIntTypeSet(GPIO_PORTB_BASE, GPIO_PIN_0 | GPIO_PIN_1, GPIO_FALLING_EDGE);
+	Set_Bit(GPIOB->PUR, 0);
+	Set_Bit(GPIOB->PUR, 1);
 	
 	//Up and Down Pins Setup
 	GPIOPinTypeGPIOInput(GPIO_PORTC_BASE , GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 );
@@ -210,6 +226,11 @@ void init(void){
 	Set_Bit(GPIOC->PUR, 5);
 	Set_Bit(GPIOC->PUR, 6);
 	Set_Bit(GPIOC->PUR, 7);
+	
+	GPIOPinTypeGPIOInput(GPIO_PORTD_BASE , GPIO_PIN_2 | GPIO_PIN_3 );
+	GPIOIntTypeSet(GPIO_PORTD_BASE, GPIO_PIN_2 | GPIO_PIN_3, GPIO_FALLING_EDGE);
+	Set_Bit(GPIOD->PUR, 2);
+	Set_Bit(GPIOD->PUR, 3);
 	
 	// Enable the Interrupt for PortF in NVIC
 	__asm("CPSIE I");
@@ -230,16 +251,16 @@ void init(void){
 //////////////
 //	Up & Down
 //////////////
-// C4
+// C4 -> D2 (Now)
 // C5
 // C6
-// C7
+// C7 -> D3 (Now)
 
 //////////////
 //	Limit Switches
 //////////////
-// D6
-// D7
+// B0
+// B1
 
 //////////////
 //	Motor Pins
