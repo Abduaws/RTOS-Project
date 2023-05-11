@@ -21,9 +21,9 @@
 
 
 struct Window {
-  bool isFullyClosed;
+	bool isFullyClosed;
 	bool isFullyOpened;
-  bool isLocked;
+	bool isLocked;
 	bool autoMode;
 };
 
@@ -39,11 +39,9 @@ void CheckButtons(void *p);
 void init(void);
 void initStructs(void);
 
-void lockHandler(void *p);
 void jamHandler(void *p);
 void autoModeHandler(void *p);
 
-void lockInterrupt(void);
 void jamInterrupt(void);
 void autoModeInterrupt(void);
 
@@ -67,8 +65,6 @@ int main(void){
 	autoModeSemaphore = xSemaphoreCreateBinary();
 	
 	xTaskCreate(CheckButtons, "CheckButtons", 100, NULL, 1, NULL);
-	
-	// xTaskCreate(lockHandler, "lockHandler", 100, NULL, 2, NULL);
 	xTaskCreate(jamHandler, "jamHandler", 100, NULL, 2, NULL);
 	xTaskCreate(autoModeHandler, "autoModeHandler", 100, NULL, 2, NULL);
 	
@@ -118,28 +114,7 @@ void CheckButtons(void *p){
 	}
 }
 
-void lockHandler(void *p){
-	
-	for(;;) {
-		xSemaphoreTake(lockSemaphore, portMAX_DELAY);
-	
-		CarWindow.isLocked = ! CarWindow.isLocked;
-	}
-}
-
-void lockInterrupt(void) {
-	portBASE_TYPE xHigherPriorityTaskWoken = ( ( BaseType_t ) 3 );
-	
-  xSemaphoreGiveFromISR(lockSemaphore, &xHigherPriorityTaskWoken);
-
-	GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_4);
-
-	portEND_SWITCHING_ISR( xHigherPriorityTaskWoken );
-}
-
-
 void jamHandler(void *p){
-	
 	for(;;) {
 		xSemaphoreTake(jamSemaphore, portMAX_DELAY);
 	}
@@ -151,7 +126,7 @@ void jamInterrupt(void) {
 	
 	portBASE_TYPE xHigherPriorityTaskWoken = ( ( BaseType_t ) 2 );
 	
-  xSemaphoreGiveFromISR(jamSemaphore, &xHigherPriorityTaskWoken);
+  	xSemaphoreGiveFromISR(jamSemaphore, &xHigherPriorityTaskWoken);
 
 	portEND_SWITCHING_ISR( xHigherPriorityTaskWoken );
 }
@@ -159,7 +134,6 @@ void jamInterrupt(void) {
 
 
 void autoModeHandler(void *p){
-	
 	for(;;) {
 		xSemaphoreTake(autoModeSemaphore, portMAX_DELAY);
 	
@@ -170,10 +144,10 @@ void autoModeHandler(void *p){
 void autoModeInterrupt(void) {
 	
 	GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7);
-	
+
 	portBASE_TYPE xHigherPriorityTaskWoken = ( ( BaseType_t ) 2 );
-	
-  xSemaphoreGiveFromISR(jamSemaphore, &xHigherPriorityTaskWoken);
+
+	xSemaphoreGiveFromISR(jamSemaphore, &xHigherPriorityTaskWoken);
 
 	portEND_SWITCHING_ISR( xHigherPriorityTaskWoken );
 }
@@ -264,49 +238,49 @@ void initStructs(void){
 void init(void){
 
 	//PORT F SETUP
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
-  while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF));
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOF));
 	
 	//PORT B SETUP
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
-  while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOB));
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOB);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOB));
 	
 	//PORT C SETUP
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
-  while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOC));
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOC);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOC));
 	
 	//PORT D SETUP
-  SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
-  while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOD));
+	SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOD);
+	while(!SysCtlPeripheralReady(SYSCTL_PERIPH_GPIOD));
 	
 	//Red Led Setup
-  GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1);
+	GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1);
 	
 	//Manual/Auto Button Setup
-  GPIOPinTypeGPIOInput(GPIO_PORTF_BASE , GPIO_PIN_0 );
-  GPIOIntRegister(GPIO_PORTF_BASE, autoModeInterrupt);
-  GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_0, GPIO_FALLING_EDGE);
-  GPIOIntEnable(GPIO_PORTF_BASE, GPIO_INT_PIN_0 );
-  Set_Bit(GPIOF->PUR, 0);
+	GPIOPinTypeGPIOInput(GPIO_PORTF_BASE , GPIO_PIN_0 );
+	GPIOIntRegister(GPIO_PORTF_BASE, autoModeInterrupt);
+	GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_0, GPIO_FALLING_EDGE);
+	GPIOIntEnable(GPIO_PORTF_BASE, GPIO_INT_PIN_0 );
+	Set_Bit(GPIOF->PUR, 0);
 	
 	//Jam Button Setup
-   GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_5 );
-   GPIOIntRegister(GPIO_PORTB_BASE, jamInterrupt);
-   GPIOIntTypeSet(GPIO_PORTB_BASE, GPIO_PIN_5, GPIO_FALLING_EDGE);
-   GPIOIntEnable(GPIO_PORTB_BASE, GPIO_INT_PIN_5 );
-   Set_Bit(GPIOB->PUR, 5);
+	GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_5 );
+	GPIOIntRegister(GPIO_PORTB_BASE, jamInterrupt);
+	GPIOIntTypeSet(GPIO_PORTB_BASE, GPIO_PIN_5, GPIO_FALLING_EDGE);
+	GPIOIntEnable(GPIO_PORTB_BASE, GPIO_INT_PIN_5 );
+	Set_Bit(GPIOB->PUR, 5);
 	
 	//Motor Pins Setup
-  GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE , GPIO_PIN_0 | GPIO_PIN_1 );
+ 	GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE , GPIO_PIN_0 | GPIO_PIN_1 );
 	
-	//limit Switch Pins Setup
-  GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_0 | GPIO_PIN_1 );
+	//Limit Switch Pins Setup
+  	GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_0 | GPIO_PIN_1 );
 	GPIOIntTypeSet(GPIO_PORTB_BASE, GPIO_PIN_0 | GPIO_PIN_1, GPIO_FALLING_EDGE);
 	Set_Bit(GPIOB->PUR, 0);
 	Set_Bit(GPIOB->PUR, 1);
 	
 	//On/Off Switch Pins Setup
-  GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_4 );
+  	GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_4 );
 	GPIOIntTypeSet(GPIO_PORTB_BASE, GPIO_PIN_4, GPIO_FALLING_EDGE);
 	Set_Bit(GPIOB->PUR, 4);
 	
@@ -321,10 +295,10 @@ void init(void){
 	Set_Bit(GPIOD->PUR, 2);
 	Set_Bit(GPIOD->PUR, 3);
 	
-	// Enable the Interrupt for PortF in NVIC
+	// Enable the Interrupt for PortF & PortB in NVIC
 	__asm("CPSIE I");
 	IntMasterEnable();
-	// NVIC_EnableIRQ(PortF_IRQn);
+
 	NVIC_SetPriority(PortF_IRQn, 5);
 	NVIC_SetPriority(PortB_IRQn, 5);
 }
