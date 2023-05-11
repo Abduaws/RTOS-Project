@@ -17,6 +17,7 @@
 #define Toggle_Bit(reg, bit) {reg ^= (1U << bit);}
 #define Get_Bit(reg, bit) ((reg & (1U << bit)) >> bit);
 #define PortF_IRQn ((IRQn_Type) 30 )
+#define PortB_IRQn ((IRQn_Type) 1 )
 
 
 struct Window {
@@ -28,12 +29,24 @@ struct Window {
 
 static struct Window CarWindow;
 static struct Button PortC_Buttons[4];
+static SemaphoreHandle_t lockSemaphore;
+static SemaphoreHandle_t jamSemaphore;
+static SemaphoreHandle_t autoModeSemaphore;
+
 
 void CheckButtons(void *p);
+
 void init(void);
 void initStructs(void);
-void autoModeHandler(void);
-void lockHandler(void);
+
+void lockHandler(void *p);
+void jamHandler(void *p);
+void autoModeHandler(void *p);
+
+void lockInterrupt(void);
+void jamInterrupt(void);
+void autoModeInterrupt(void);
+
 bool hasPermission(enum User user);
 void moveWindow(struct Button currBtn);
 void limitSwitchHandler(int limitSwitch);
@@ -48,14 +61,27 @@ void delayMS(int ms){
 int main(void){
 	initStructs();
 	init();
-	xTaskCreate(CheckButtons, "CheckButtons", 100, NULL, 2, NULL);
+	
+	lockSemaphore = xSemaphoreCreateBinary();
+	jamSemaphore = xSemaphoreCreateBinary();
+	autoModeSemaphore = xSemaphoreCreateBinary();
+	
+	xTaskCreate(CheckButtons, "CheckButtons", 100, NULL, 1, NULL);
+	
+	// xTaskCreate(lockHandler, "lockHandler", 100, NULL, 2, NULL);
+	xTaskCreate(jamHandler, "jamHandler", 100, NULL, 2, NULL);
+	xTaskCreate(autoModeHandler, "autoModeHandler", 100, NULL, 2, NULL);
+	
 	vTaskStartScheduler();
 	return 0;
 }
 
 void CheckButtons(void *p){
+	
 	for( ; ; ){
+		
 		bool isZero = true;
+		
 		for(int i = 4; i < 8; i++){
 			uint32_t bit = Get_Bit(GPIOC->DATA, i);
 			if(i == 4) {
@@ -74,25 +100,85 @@ void CheckButtons(void *p){
 		}
 		uint32_t bit = Get_Bit(GPIOB->DATA, 0);
 		if (bit == 0){
-				limitSwitchHandler(0);
+			limitSwitchHandler(0);
 		}
+		
 		bit = Get_Bit(GPIOB->DATA, 1);
 		if (bit == 0){
-				limitSwitchHandler(1);
+			limitSwitchHandler(1);
+		}
+		
+		bit = Get_Bit(GPIOB->DATA, 4);
+		if (bit == 0) {
+			CarWindow.isLocked = true;
+		}
+		else if (bit == 1) {
+			CarWindow.isLocked = false;
 		}
 	}
 }
 
+void lockHandler(void *p){
+	
+	for(;;) {
+		xSemaphoreTake(lockSemaphore, portMAX_DELAY);
+	
+		CarWindow.isLocked = ! CarWindow.isLocked;
+	}
+}
 
-void lockHandler(void){
-	CarWindow.isLocked = ! CarWindow.isLocked;
+void lockInterrupt(void) {
+	portBASE_TYPE xHigherPriorityTaskWoken = ( ( BaseType_t ) 3 );
+	
+  xSemaphoreGiveFromISR(lockSemaphore, &xHigherPriorityTaskWoken);
+
 	GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_4);
+
+	portEND_SWITCHING_ISR( xHigherPriorityTaskWoken );
 }
 
-void autoModeHandler(void){
-	CarWindow.autoMode = ! CarWindow.autoMode;
-	GPIOIntClear(GPIO_PORTF_BASE, GPIO_INT_PIN_0);
+
+void jamHandler(void *p){
+	
+	for(;;) {
+		xSemaphoreTake(jamSemaphore, portMAX_DELAY);
+	}
 }
+
+void jamInterrupt(void) {
+	
+	GPIOIntClear(GPIO_PORTB_BASE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7);
+	
+	portBASE_TYPE xHigherPriorityTaskWoken = ( ( BaseType_t ) 2 );
+	
+  xSemaphoreGiveFromISR(jamSemaphore, &xHigherPriorityTaskWoken);
+
+	portEND_SWITCHING_ISR( xHigherPriorityTaskWoken );
+}
+
+
+
+void autoModeHandler(void *p){
+	
+	for(;;) {
+		xSemaphoreTake(autoModeSemaphore, portMAX_DELAY);
+	
+		CarWindow.autoMode = ! CarWindow.autoMode;
+	}
+}
+
+void autoModeInterrupt(void) {
+	
+	GPIOIntClear(GPIO_PORTF_BASE, GPIO_PIN_0 | GPIO_PIN_1 | GPIO_PIN_2 | GPIO_PIN_3 | GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7);
+	
+	portBASE_TYPE xHigherPriorityTaskWoken = ( ( BaseType_t ) 2 );
+	
+  xSemaphoreGiveFromISR(jamSemaphore, &xHigherPriorityTaskWoken);
+
+	portEND_SWITCHING_ISR( xHigherPriorityTaskWoken );
+}
+
+
 
 bool hasPermission(enum User user){
   if(CarWindow.isLocked && user == passenger)
@@ -196,19 +282,19 @@ void init(void){
 	//Red Led Setup
   GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1);
 	
-	//Lock Button Setup
-  GPIOPinTypeGPIOInput(GPIO_PORTF_BASE , GPIO_PIN_4 );
-  GPIOIntRegister(GPIO_PORTF_BASE, lockHandler);
-  GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_FALLING_EDGE);
-  GPIOIntEnable(GPIO_PORTF_BASE, GPIO_INT_PIN_4 );
-  Set_Bit(GPIOF->PUR, 4);
-	
-	//Auto Button Setup
+	//Manual/Auto Button Setup
   GPIOPinTypeGPIOInput(GPIO_PORTF_BASE , GPIO_PIN_0 );
-  GPIOIntRegister(GPIO_PORTF_BASE, autoModeHandler);
+  GPIOIntRegister(GPIO_PORTF_BASE, autoModeInterrupt);
   GPIOIntTypeSet(GPIO_PORTF_BASE, GPIO_PIN_0, GPIO_FALLING_EDGE);
   GPIOIntEnable(GPIO_PORTF_BASE, GPIO_INT_PIN_0 );
   Set_Bit(GPIOF->PUR, 0);
+	
+	//Jam Button Setup
+   GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_5 );
+   GPIOIntRegister(GPIO_PORTB_BASE, jamInterrupt);
+   GPIOIntTypeSet(GPIO_PORTB_BASE, GPIO_PIN_5, GPIO_FALLING_EDGE);
+   GPIOIntEnable(GPIO_PORTB_BASE, GPIO_INT_PIN_5 );
+   Set_Bit(GPIOB->PUR, 5);
 	
 	//Motor Pins Setup
   GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE , GPIO_PIN_0 | GPIO_PIN_1 );
@@ -219,13 +305,16 @@ void init(void){
 	Set_Bit(GPIOB->PUR, 0);
 	Set_Bit(GPIOB->PUR, 1);
 	
+	//On/Off Switch Pins Setup
+  GPIOPinTypeGPIOInput(GPIO_PORTB_BASE , GPIO_PIN_4 );
+	GPIOIntTypeSet(GPIO_PORTB_BASE, GPIO_PIN_4, GPIO_FALLING_EDGE);
+	Set_Bit(GPIOB->PUR, 4);
+	
 	//Up and Down Pins Setup
-	GPIOPinTypeGPIOInput(GPIO_PORTC_BASE , GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7 );
-	GPIOIntTypeSet(GPIO_PORTC_BASE, GPIO_PIN_4 | GPIO_PIN_5 | GPIO_PIN_6 | GPIO_PIN_7, GPIO_FALLING_EDGE);
-	Set_Bit(GPIOC->PUR, 4);
+	GPIOPinTypeGPIOInput(GPIO_PORTC_BASE , GPIO_PIN_5 | GPIO_PIN_6 );
+	GPIOIntTypeSet(GPIO_PORTC_BASE, GPIO_PIN_5 | GPIO_PIN_6 , GPIO_FALLING_EDGE);
 	Set_Bit(GPIOC->PUR, 5);
 	Set_Bit(GPIOC->PUR, 6);
-	Set_Bit(GPIOC->PUR, 7);
 	
 	GPIOPinTypeGPIOInput(GPIO_PORTD_BASE , GPIO_PIN_2 | GPIO_PIN_3 );
 	GPIOIntTypeSet(GPIO_PORTD_BASE, GPIO_PIN_2 | GPIO_PIN_3, GPIO_FALLING_EDGE);
@@ -235,18 +324,15 @@ void init(void){
 	// Enable the Interrupt for PortF in NVIC
 	__asm("CPSIE I");
 	IntMasterEnable();
-	NVIC_EnableIRQ(PortF_IRQn);
+	// NVIC_EnableIRQ(PortF_IRQn);
 	NVIC_SetPriority(PortF_IRQn, 5);
-	
-	
-	Set_Bit(GPIOD->DATA, 0);
-	Clear_Bit(GPIOD->DATA, 1);
-	
-	delayMS(1000);
-	
-	Clear_Bit(GPIOD->DATA, 0);
-	Clear_Bit(GPIOD->DATA, 1);
+	NVIC_SetPriority(PortB_IRQn, 5);
 }
+
+//////////////
+//	Manual/Auto Button
+//////////////
+// F0
 
 //////////////
 //	Up & Down
@@ -261,6 +347,16 @@ void init(void){
 //////////////
 // B0
 // B1
+
+//////////////
+//	On/Off Switche
+//////////////
+// B4
+
+//////////////
+//	Jam Switch
+//////////////
+// B5
 
 //////////////
 //	Motor Pins
