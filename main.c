@@ -29,7 +29,6 @@ struct Window {
 
 static struct Window CarWindow;
 static struct Button PortC_Buttons[4];
-static SemaphoreHandle_t lockSemaphore;
 static SemaphoreHandle_t jamSemaphore;
 static SemaphoreHandle_t autoModeSemaphore;
 
@@ -60,7 +59,6 @@ int main(void){
 	initStructs();
 	init();
 	
-	lockSemaphore = xSemaphoreCreateBinary();
 	jamSemaphore = xSemaphoreCreateBinary();
 	autoModeSemaphore = xSemaphoreCreateBinary();
 	
